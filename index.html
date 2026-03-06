@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Visual PDF Studio Pro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <style>
+        :root { --red: #e53935; --dark-red: #c62828; --green: #2e7d32; --blue: #1976d2; --bg: #f5f5fa; --text: #333; --border: #e0e0e0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; color: var(--text); overflow-x: hidden; }
+        
+        .privacy-bar { background: var(--green); color: white; text-align: center; padding: 6px 0; font-size: 0.8rem; font-weight: bold; }
+        nav { background: white; padding: 12px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .logo { color: var(--red); font-size: 1.5rem; font-weight: 900; text-decoration: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        
+        .btn { padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; }
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text); }
+        .btn-outline:hover { background: #f0f0f0; }
+        .btn-primary { background: var(--red); color: white; }
+        .btn-primary:hover { background: var(--dark-red); }
+        .btn-action { background: var(--blue); color: white; }
+        .btn-action:hover { opacity: 0.9; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* ダッシュボード */
+        #dashboard { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+        .grid-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+        .menu-card { background: white; padding: 25px 20px; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.3s; border: 1px solid transparent; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .menu-card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); border-color: var(--red); }
+        .menu-card i { font-size: 2.5rem; color: var(--red); margin-bottom: 15px; }
+        .menu-card h3 { margin: 10px 0 5px 0; font-size: 1.1rem; }
+        .menu-card p { font-size: 0.85rem; color: #777; margin: 0; }
+
+        /* ワークスペース */
+        #workspace { display: none; display: flex; min-height: calc(100vh - 80px); }
+        .main-content { flex: 1; padding: 20px; position: relative; overflow-y: auto; display: flex; flex-direction: column; }
+        .sidebar { width: 320px; background: white; border-left: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; box-shadow: -2px 0 10px rgba(0,0,0,0.02); }
+        
+        .tool-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+        .tool-header h2 { margin: 0; color: var(--dark-red); display: flex; align-items: center; gap: 10px; }
+        
+        .upload-screen { flex: 1; border: 3px dashed #ccc; border-radius: 16px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fafafa; transition: 0.3s; min-height: 400px; margin-bottom: 20px; }
+        .upload-screen.dragover { border-color: var(--red); background: #fff5f5; }
+        .upload-screen.hidden { display: none; }
+        
+        #page-grid { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; }
+        
+        .page-card { background: white; border-radius: 6px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; cursor: grab; display: flex; flex-direction: column; align-items: center; transition: 0.2s; border: 1px solid #eee; }
+        .page-card:active { cursor: grabbing; }
+        .page-card:hover { transform: scale(1.03); box-shadow: 0 8px 16px rgba(0,0,0,0.15); border-color: var(--red); }
+        
+        .canvas-container { width: 140px; height: 198px; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #f9f9f9; margin-bottom: 8px; border: 1px solid #eee; }
+        canvas { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s ease; }
+        .page-number { font-size: 13px; color: #555; font-weight: bold; background: #eee; padding: 2px 10px; border-radius: 12px; }
+        
+        .card-actions { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; gap: 15px; opacity: 0; transition: 0.2s; border-radius: 6px; }
+        .page-card:hover .card-actions { opacity: 1; }
+        .action-btn { background: white; color: var(--text); border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 16px; transition: 0.2s; }
+        .action-btn:hover { background: var(--red); color: white; transform: scale(1.1); }
+
+        .opt-group { margin-bottom: 20px; display: none; background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .opt-group.active { display: block; }
+        .opt-group label { display: block; font-size: 13px; font-weight: bold; color: #444; margin-bottom: 8px; }
+        .opt-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; margin-bottom: 10px; }
+        
+        #loader { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--red); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="privacy-bar"><i class="fas fa-shield-alt"></i> No-Logs Policy: すべての処理はブラウザ内で安全に完結します。</div>
+<nav>
+    <div class="logo" onclick="showDashboard()"><i class="fas fa-file-pdf"></i> Visual PDF Studio Pro</div>
+    <div style="font-size: 0.85rem; color: #666; font-weight: bold;">100% Client-Side</div>
+</nav>
+
+<div id="dashboard">
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h1 style="color: var(--text);">PDFのすべてを直感的に</h1>
+        <p style="color: #666;">全13の強力なツール群。プレビューを見ながら快適に編集できます。</p>
+    </div>
+    <div class="grid-menu">
+        <div class="menu-card" onclick="initTool('merge', 'PDF 結合', 'fas fa-layer-group')"><i class="fas fa-layer-group"></i><h3>Merge PDF</h3><p>複数を1つに結合</p></div>
+        <div class="menu-card" onclick="initTool('split', 'PDF 分割・削除', 'fas fa-scissors')"><i class="fas fa-scissors"></i><h3>Split PDF</h3><p>不要ページを削除</p></div>
+        <div class="menu-card" onclick="initTool('organize', 'PDF 整理', 'fas fa-th-large')"><i class="fas fa-th-large"></i><h3>Organize PDF</h3><p>ページ順を入れ替え</p></div>
+        <div class="menu-card" onclick="initTool('rotate', 'PDF 回転', 'fas fa-sync')"><i class="fas fa-sync"></i><h3>Rotate PDF</h3><p>向きを修正</p></div>
+        <div class="menu-card" onclick="initTool('watermark', '透かし追加', 'fas fa-stamp')"><i class="fas fa-stamp"></i><h3>Watermark</h3><p>文字を重ねる</p></div>
+        <div class="menu-card" onclick="initTool('number', 'ページ番号', 'fas fa-list-ol')"><i class="fas fa-list-ol"></i><h3>Page Numbers</h3><p>番号を振る</p></div>
+        <div class="menu-card" onclick="initTool('protect', 'パスワード保護', 'fas fa-lock')"><i class="fas fa-lock"></i><h3>Protect PDF</h3><p>閲覧制限をかける</p></div>
+        <div class="menu-card" onclick="initTool('unlock', 'パスワード解除', 'fas fa-unlock')"><i class="fas fa-unlock"></i><h3>Unlock PDF</h3><p>制限を解除する</p></div>
+        <div class="menu-card" onclick="initTool('edit', '追記編集', 'fas fa-pen')"><i class="fas fa-pen"></i><h3>Edit PDF</h3><p>テキストを追記</p></div>
+        <div class="menu-card" onclick="initTool('jpg2pdf', '画像 → PDF', 'fas fa-file-image')"><i class="fas fa-file-image"></i><h3>Image to PDF</h3><p>JPG/PNGをPDF化</p></div>
+        <div class="menu-card" onclick="initTool('pdf2jpg', 'PDF → 画像', 'fas fa-images')"><i class="fas fa-images"></i><h3>PDF to JPG</h3><p>ページを画像保存</p></div>
+        <div class="menu-card" onclick="initTool('pdf2txt', 'テキスト抽出', 'fas fa-file-alt')"><i class="fas fa-file-alt"></i><h3>PDF to Text</h3><p>文字データのみ抽出</p></div>
+        <div class="menu-card" onclick="initTool('metadata', 'メタデータ編集', 'fas fa-tags')"><i class="fas fa-tags"></i><h3>Edit Metadata</h3><p>タイトル・作成者変更</p></div>
+    </div>
+</div>
+
+<div id="workspace" style="display: none;">
+    <div class="main-content" id="drop-area">
+        <div class="tool-header">
+            <h2 id="ws-title"><i class="fas fa-tools"></i> Tool Name</h2>
+            <div>
+                <button class="btn btn-action" onclick="addBlankPage()" title="白紙を追加"><i class="fas fa-file"></i> 空白ページ</button>
+                <button class="btn btn-outline" onclick="rotateAllVisible()"><i class="fas fa-undo"></i> すべて回転</button>
+                <button class="btn btn-outline" onclick="document.getElementById('file-upload').click()"><i class="fas fa-plus"></i> 追加</button>
+                <input type="file" id="file-upload" multiple accept="application/pdf, image/jpeg, image/png" style="display: none;">
+            </div>
+        </div>
+        
+        <div class="upload-screen" id="upload-screen">
+            <i class="fas fa-cloud-upload-alt" style="font-size: 5rem; color: #d1d5db; margin-bottom: 15px;"></i>
+            <h2 style="color: #555;">ファイルをここにドロップ</h2>
+            <button class="btn btn-primary" style="font-size: 1.1rem; padding: 15px 30px;" onclick="document.getElementById('file-upload').click()">ファイルを選択</button>
+        </div>
+        
+        <div id="page-grid"></div>
+    </div>
+    
+    <div class="sidebar">
+        <h3 style="margin-top: 0; border-bottom: 2px solid var(--red); padding-bottom: 10px;">ツール設定</h3>
+        
+        <div id="opt-watermark" class="opt-group"><label>透かしテキスト</label><input type="text" id="in-watermark" placeholder="CONFIDENTIAL"></div>
+        <div id="opt-protect" class="opt-group"><label>設定するパスワード</label><input type="password" id="in-protect" placeholder="パスワードを入力"></div>
+        <div id="opt-unlock" class="opt-group"><label>現在のパスワード</label><input type="password" id="in-unlock" placeholder="入力してからファイル追加"></div>
+        <div id="opt-edit" class="opt-group"><label>上部に追記する文字</label><input type="text" id="in-edit" placeholder="承認済み"></div>
+        
+        <div id="opt-metadata" class="opt-group">
+            <label>タイトル (Title)</label><input type="text" id="in-meta-title" placeholder="新しいタイトル">
+            <label>作成者 (Author)</label><input type="text" id="in-meta-author" placeholder="作成者名">
+        </div>
+
+        <div style="flex: 1;"></div>
+        <div style="background: #fff5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #666;">
+            <i class="fas fa-lightbulb" style="color: var(--red);"></i> 
+            <strong>ヒント:</strong> サムネイルをドラッグで並べ替え。上の「+ 空白ページ」ボタンでどこにでも白紙を挿入できます。
+        </div>
+
+        <button class="btn btn-primary" id="btn-export" onclick="executeTask()" style="width: 100%; padding: 18px; font-size: 1.1rem;" disabled>
+            <i class="fas fa-download"></i> 処理を実行して保存
+        </button>
+    </div>
+</div>
+
+<div id="loader"><div class="spinner"></div><h2 id="loader-text">処理中...</h2></div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
+
+    let currentMode = '';
+    let fileStore = {}; 
+    let blankPageCounter = 0; // 空白ページ用ID
+    
+    const ui = {
+        dash: document.getElementById('dashboard'), ws: document.getElementById('workspace'),
+        title: document.getElementById('ws-title'), upload: document.getElementById('upload-screen'),
+        grid: document.getElementById('page-grid'), exportBtn: document.getElementById('btn-export')
+    };
+
+    new Sortable(ui.grid, { animation: 150, onEnd: updatePageNumbers });
+
+    function showDashboard() {
+        ui.ws.style.display = 'none'; ui.dash.style.display = 'block';
+        ui.grid.innerHTML = ''; ui.upload.classList.remove('hidden');
+        fileStore = {}; ui.exportBtn.disabled = true;
+    }
+
+    function initTool(mode, title, iconClass) {
+        currentMode = mode;
+        ui.dash.style.display = 'none'; ui.ws.style.display = 'flex';
+        ui.title.innerHTML = `<i class="${iconClass}"></i> ${title}`;
+        
+        document.querySelectorAll('.opt-group').forEach(el => el.classList.remove('active'));
+        if(mode === 'watermark') document.getElementById('opt-watermark').classList.add('active');
+        if(mode === 'protect') document.getElementById('opt-protect').classList.add('active');
+        if(mode === 'unlock') document.getElementById('opt-unlock').classList.add('active');
+        if(mode === 'edit') document.getElementById('opt-edit').classList.add('active');
+        if(mode === 'metadata') document.getElementById('opt-metadata').classList.add('active');
+        
+        document.getElementById('file-upload').accept = (mode === 'jpg2pdf') ? "image/jpeg, image/png" : "application/pdf";
+    }
+
+    document.getElementById('file-upload').addEventListener('change', handleFiles);
+    document.getElementById('drop-area').addEventListener('dragover', e => { e.preventDefault(); ui.upload.classList.add('dragover'); });
+    document.getElementById('drop-area').addEventListener('dragleave', () => ui.upload.classList.remove('dragover'));
+    document.getElementById('drop-area').addEventListener('drop', e => {
+        e.preventDefault(); ui.upload.classList.remove('dragover');
+        if(e.dataTransfer.files.length) handleFiles({target: {files: e.dataTransfer.files}});
+    });
+
+    async function handleFiles(e) {
+        const files = Array.from(e.target.files);
+        if(!files.length) return;
+        
+        showLoader("ファイルを展開中...");
+        ui.upload.classList.add('hidden'); ui.exportBtn.disabled = false;
+
+        for (let file of files) {
+            const fId = 'f_' + Math.random().toString(36).substr(2, 9);
+            const arrayBuffer = await file.arrayBuffer();
+            fileStore[fId] = { buffer: arrayBuffer, name: file.name, type: file.type, isImage: file.type.startsWith('image/') };
+            
+            if (fileStore[fId].isImage) {
+                await renderImageCard(file, fId);
+            } else {
+                try {
+                    const pass = document.getElementById('in-unlock').value;
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, password: pass }).promise;
+                    for (let i = 1; i <= pdf.numPages; i++) await renderPdfPageCard(await pdf.getPage(i), fId, i - 1);
+                } catch (err) {
+                    if(err.name === 'PasswordException') alert("パスワードが正しくないか、入力されていません。");
+                    else alert("読み込みエラー: " + err.message);
+                }
+            }
+        }
+        updatePageNumbers(); hideLoader();
+    }
+
+    // --- 新機能：空白ページの挿入 ---
+    function addBlankPage() {
+        ui.upload.classList.add('hidden'); ui.exportBtn.disabled = false;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 140; canvas.height = 198; // A4比率
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#ccc'; ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#999'; ctx.font = "14px Arial"; ctx.fillText("Blank Page", 35, 100);
+
+        createCardDOM(canvas, `blank_${blankPageCounter++}`, 0);
+        updatePageNumbers();
+    }
+
+    async function renderPdfPageCard(page, fileId, pageIndex) {
+        const vp = page.getViewport({ scale: 0.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = vp.width; canvas.height = vp.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        createCardDOM(canvas, fileId, pageIndex);
+    }
+
+    async function renderImageCard(file, fileId) {
+        const url = URL.createObjectURL(file);
+        const img = new Image(); img.src = url;
+        await new Promise(r => img.onload = r);
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(150 / img.width, 212 / img.height);
+        canvas.width = img.width * scale; canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        createCardDOM(canvas, fileId, 0);
+    }
+
+    function createCardDOM(canvas, fileId, pageIndex) {
+        const card = document.createElement('div');
+        card.className = 'page-card'; card.dataset.fId = fileId; card.dataset.pIdx = pageIndex; card.dataset.rot = 0;
+
+        const cCont = document.createElement('div'); cCont.className = 'canvas-container'; cCont.appendChild(canvas);
+        const num = document.createElement('div'); num.className = 'page-number';
+        
+        const acts = document.createElement('div'); acts.className = 'card-actions';
+        const rotBtn = document.createElement('button'); rotBtn.className = 'action-btn'; rotBtn.innerHTML = '<i class="fas fa-undo"></i>';
+        rotBtn.onclick = (e) => { e.stopPropagation(); rotateCard(card, canvas); };
+        
+        const delBtn = document.createElement('button'); delBtn.className = 'action-btn'; delBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        delBtn.onclick = (e) => { 
+            e.stopPropagation(); card.remove(); updatePageNumbers();
+            if(!ui.grid.children.length) { ui.upload.classList.remove('hidden'); ui.exportBtn.disabled = true; }
+        };
+
+        acts.appendChild(rotBtn); acts.appendChild(delBtn);
+        card.appendChild(cCont); card.appendChild(num); card.appendChild(acts);
+        ui.grid.appendChild(card);
+    }
+
+    function rotateCard(card, canvas) {
+        let r = (parseInt(card.dataset.rot) + 90) % 360; card.dataset.rot = r; canvas.style.transform = `rotate(${r}deg)`;
+    }
+    function rotateAllVisible() { ui.grid.querySelectorAll('.page-card').forEach(c => rotateCard(c, c.querySelector('canvas'))); }
+    function updatePageNumbers() { ui.grid.querySelectorAll('.page-card').forEach((c, i) => c.querySelector('.page-number').innerText = i + 1); }
+
+    // --- エクスポート処理 ---
+    async function executeTask() {
+        showLoader("処理を実行中...");
+        try {
+            const cards = Array.from(ui.grid.querySelectorAll('.page-card'));
+            
+            // 1. PDF2JPG 分岐
+            if (currentMode === 'pdf2jpg') {
+                for(let i=0; i<cards.length; i++) {
+                    downloadData(cards[i].querySelector('canvas').toDataURL('image/jpeg', 0.8), `page_${i+1}.jpg`);
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                hideLoader(); return;
+            }
+
+            // 2. 新機能: PDF2TXT (テキスト抽出) 分岐
+            if (currentMode === 'pdf2txt') {
+                let extractedText = "--- Extracted Document ---\n\n";
+                for (let i = 0; i < cards.length; i++) {
+                    const fId = cards[i].dataset.fId;
+                    if (fId.startsWith('blank') || fileStore[fId].isImage) continue;
+                    
+                    const pdf = await pdfjsLib.getDocument({ data: fileStore[fId].buffer }).promise;
+                    const page = await pdf.getPage(parseInt(cards[i].dataset.pIdx) + 1);
+                    const content = await page.getTextContent();
+                    extractedText += `--- Page ${i+1} ---\n`;
+                    extractedText += content.items.map(item => item.str).join(' ') + "\n\n";
+                }
+                downloadData(extractedText, 'extracted_text.txt', 'text/plain');
+                hideLoader(); return;
+            }
+
+            // 3. 通常のPDF生成フロー
+            const outDoc = await PDFDocument.create();
+            const parsedDocs = {};
+
+            for (let i = 0; i < cards.length; i++) {
+                const card = cards[i]; const fId = card.dataset.fId; 
+                const pIdx = parseInt(card.dataset.pIdx); const visualRot = parseInt(card.dataset.rot);
+                let newPage;
+
+                if (fId.startsWith('blank')) {
+                    // 新機能：空白ページの挿入 (A4サイズ)
+                    newPage = outDoc.addPage([595.28, 841.89]);
+                } else {
+                    const fileInfo = fileStore[fId];
+                    if (fileInfo.isImage) {
+                        // 新機能：PNGサポート
+                        let img;
+                        if (fileInfo.type === 'image/png') img = await outDoc.embedPng(fileInfo.buffer);
+                        else img = await outDoc.embedJpg(fileInfo.buffer);
+                        newPage = outDoc.addPage([img.width, img.height]);
+                        newPage.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+                    } else {
+                        if (!parsedDocs[fId]) parsedDocs[fId] = await PDFDocument.load(fileInfo.buffer, { password: document.getElementById('in-unlock').value });
+                        [newPage] = await outDoc.copyPages(parsedDocs[fId], [pIdx]);
+                        outDoc.addPage(newPage);
+                    }
+                }
+
+                if (visualRot !== 0) newPage.setRotation(degrees((newPage.getRotation().angle + visualRot) % 360));
+                
+                if (currentMode === 'watermark') {
+                    const txt = document.getElementById('in-watermark').value || "CONFIDENTIAL";
+                    newPage.drawText(txt, { x: newPage.getWidth()/5, y: newPage.getHeight()/2, size: 60, opacity: 0.3, rotate: degrees(45), color: rgb(0.8,0,0) });
+                }
+                if (currentMode === 'number') newPage.drawText(`${i+1} / ${cards.length}`, { x: newPage.getWidth()-60, y: 20, size: 12, color: rgb(0,0,0) });
+                if (currentMode === 'edit') {
+                    const txt = document.getElementById('in-edit').value || "Edited";
+                    newPage.drawRectangle({ x: 0, y: newPage.getHeight()-30, width: newPage.getWidth(), height: 30, color: rgb(1,1,0) });
+                    newPage.drawText(txt, { x: 10, y: newPage.getHeight()-20, size: 14, color: rgb(0,0,0) });
+                }
+            }
+
+            // 新機能: メタデータの編集
+            if (currentMode === 'metadata') {
+                const title = document.getElementById('in-meta-title').value;
+                const author = document.getElementById('in-meta-author').value;
+                if (title) outDoc.setTitle(title);
+                if (author) outDoc.setAuthor(author);
+            }
+
+            const saveOpts = {};
+            if (currentMode === 'protect') {
+                const p = document.getElementById('in-protect').value;
+                if(p) { saveOpts.userPassword = p; saveOpts.ownerPassword = p; }
+            }
+
+            const pdfBytes = await outDoc.save(saveOpts);
+            const firstCard = cards.find(c => !c.dataset.fId.startsWith('blank'));
+            const baseName = firstCard ? fileStore[firstCard.dataset.fId].name.split('.')[0] : "document";
+            downloadData(pdfBytes, `${baseName}_${currentMode}.pdf`, "application/pdf");
+
+        } catch(e) { alert("エラー: " + e.message); }
+        hideLoader();
+    }
+
+    function downloadData(data, filename, type = "image/jpeg") {
+        const a = document.createElement('a');
+        if (typeof data === 'string' && data.startsWith('data:')) { a.href = data; } 
+        else if (type === 'text/plain') { a.href = URL.createObjectURL(new Blob([data], { type: "text/plain;charset=utf-8" })); }
+        else { a.href = URL.createObjectURL(new Blob([data], { type })); }
+        a.download = filename; a.click();
+    }
+
+    function showLoader(txt) { document.getElementById('loader-text').innerText = txt; document.getElementById('loader').style.display = 'flex'; }
+    function hideLoader() { document.getElementById('loader').style.display = 'none'; }
+</script>
+</body>
+</html>
