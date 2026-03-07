@@ -132,8 +132,8 @@
         <div id="opt-edit" class="opt-group"><label>上部に追記する文字</label><input type="text" id="in-edit" placeholder="承認済み"></div>
         
         <div id="opt-metadata" class="opt-group">
-            <label>タイトル (Title)</label><input type="text" id="in-meta-title" placeholder="新しいタイトル">
-            <label>作成者 (Author)</label><input type="text" id="in-meta-author" placeholder="作成者名">
+            <label>タイトル Title</label><input type="text" id="in-meta-title" placeholder="新しいタイトル">
+            <label>作成者 Author</label><input type="text" id="in-meta-author" placeholder="作成者名">
         </div>
 
         <div style="flex: 1;"></div>
@@ -196,7 +196,9 @@
     });
 
     async function handleFiles(e) {
-        const files = Array.from(e.target.files);
+        const files = Array.from(e.target.files).sort((a, b) => 
+            a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+        );
         if(!files.length) return;
         
         showLoader("ファイルを展開中...");
@@ -300,7 +302,7 @@
                 hideLoader(); return;
             }
 
-            // 2. 新機能: PDF2TXT (テキスト抽出) 分岐
+            // 2. 新機能: PDF2TXT テキスト抽出 分岐
             if (currentMode === 'pdf2txt') {
                 let extractedText = "--- Extracted Document ---\n\n";
                 for (let i = 0; i < cards.length; i++) {
@@ -327,7 +329,7 @@
                 let newPage;
 
                 if (fId.startsWith('blank')) {
-                    // 新機能：空白ページの挿入 (A4サイズ)
+                    // 新機能：空白ページの挿入 A4サイズ
                     newPage = outDoc.addPage([595.28, 841.89]);
                 } else {
                     const fileInfo = fileStore[fId];
