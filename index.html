@@ -214,7 +214,7 @@
             } else {
                 try {
                     const pass = document.getElementById('in-unlock').value;
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, password: pass }).promise;
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0), password: pass }).promise;
                     for (let i = 1; i <= pdf.numPages; i++) await renderPdfPageCard(await pdf.getPage(i), fId, i - 1);
                 } catch (err) {
                     if(err.name === 'PasswordException') alert("パスワードが正しくないか、入力されていません。");
