@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Visual PDF Studio Pro</title>
+    <title>Visual PDF Studio</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -66,8 +66,10 @@
         .opt-group.active { display: block; }
         .opt-group label { display: block; font-size: 13px; font-weight: bold; color: #444; margin-bottom: 8px; }
         .opt-group input[type="text"], .opt-group input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; margin-bottom: 10px; }
-        .opt-group input[type="range"] { width: 100%; margin-bottom: 5px; }
+        .opt-group input[type="range"] { width: 100%; margin-bottom: 5px; cursor: pointer; }
         
+        #size-preview { background: #e3f2fd; color: var(--blue); padding: 10px; border-radius: 6px; font-size: 13px; text-align: center; margin-top: 10px; border: 1px solid #bbdefb; font-weight: bold; }
+
         #loader { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--red); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -136,7 +138,12 @@
 
         <div id="opt-compress" class="opt-group">
             <label>圧縮率（JPEG画質）: <span id="val-compress">50</span>%</label>
-            <input type="range" id="in-compress" min="10" max="100" value="50" oninput="document.getElementById('val-compress').innerText=this.value">
+            <input type="range" id="in-compress" min="10" max="100" value="50" 
+                   oninput="document.getElementById('val-compress').innerText=this.value"
+                   onchange="updateSizePreview()">
+            
+            <div id="size-preview"><i class="fas fa-info-circle"></i> ファイルを追加してください</div>
+
             <div style="font-size: 11px; color: #888; margin-top: 8px; line-height: 1.4;">
                 ※ファイルサイズを下げるため、全ページを画像に変換します。テキストの選択・検索はできなくなります。
             </div>
@@ -162,7 +169,8 @@
 
     let currentMode = '';
     let fileStore = {}; 
-    let blankPageCounter = 0; // 空白ページ用ID
+    let blankPageCounter = 0; 
+    let isCalculatingSize = false; 
     
     const ui = {
         dash: document.getElementById('dashboard'), ws: document.getElementById('workspace'),
@@ -170,7 +178,7 @@
         grid: document.getElementById('page-grid'), exportBtn: document.getElementById('btn-export')
     };
 
-    new Sortable(ui.grid, { animation: 150, onEnd: updatePageNumbers });
+    new Sortable(ui.grid, { animation: 150, onEnd: () => { updatePageNumbers(); } });
 
     function showDashboard() {
         ui.ws.style.display = 'none'; ui.dash.style.display = 'block';
@@ -189,7 +197,10 @@
         if(mode === 'unlock') document.getElementById('opt-unlock').classList.add('active');
         if(mode === 'edit') document.getElementById('opt-edit').classList.add('active');
         if(mode === 'metadata') document.getElementById('opt-metadata').classList.add('active');
-        if(mode === 'compress') document.getElementById('opt-compress').classList.add('active');
+        if(mode === 'compress') {
+            document.getElementById('opt-compress').classList.add('active');
+            if(ui.grid.children.length > 0) updateSizePreview();
+        }
         
         document.getElementById('file-upload').accept = (mode === 'jpg2pdf') ? "image/jpeg, image/png" : "application/pdf";
     }
@@ -229,7 +240,10 @@
                 }
             }
         }
-        updatePageNumbers(); hideLoader();
+        updatePageNumbers(); 
+        hideLoader();
+        
+        if(currentMode === 'compress') updateSizePreview();
     }
 
     function addBlankPage() {
@@ -244,6 +258,8 @@
 
         createCardDOM(canvas, `blank_${blankPageCounter++}`, 0);
         updatePageNumbers();
+
+        if(currentMode === 'compress') updateSizePreview();
     }
 
     async function renderPdfPageCard(page, fileId, pageIndex) {
@@ -279,7 +295,12 @@
         const delBtn = document.createElement('button'); delBtn.className = 'action-btn'; delBtn.innerHTML = '<i class="fas fa-trash"></i>';
         delBtn.onclick = (e) => { 
             e.stopPropagation(); card.remove(); updatePageNumbers();
-            if(!ui.grid.children.length) { ui.upload.classList.remove('hidden'); ui.exportBtn.disabled = true; }
+            if(!ui.grid.children.length) { 
+                ui.upload.classList.remove('hidden'); ui.exportBtn.disabled = true; 
+                if(currentMode === 'compress') document.getElementById('size-preview').innerHTML = '<i class="fas fa-info-circle"></i> ファイルを追加してください';
+            } else {
+                if(currentMode === 'compress') updateSizePreview();
+            }
         };
 
         acts.appendChild(rotBtn); acts.appendChild(delBtn);
@@ -293,12 +314,88 @@
     function rotateAllVisible() { ui.grid.querySelectorAll('.page-card').forEach(c => rotateCard(c, c.querySelector('canvas'))); }
     function updatePageNumbers() { ui.grid.querySelectorAll('.page-card').forEach((c, i) => c.querySelector('.page-number').innerText = i + 1); }
 
-async function executeTask() {
+    // --- 変更点: 全ページを正確に画像化してサイズを計算する ---
+    async function updateSizePreview() {
+        if (currentMode !== 'compress') return;
+        
+        const previewDiv = document.getElementById('size-preview');
+        const cards = Array.from(ui.grid.querySelectorAll('.page-card'));
+        
+        if (cards.length === 0) return;
+        if (isCalculatingSize) return;
+
+        isCalculatingSize = true;
+        // 処理に時間がかかることを明示
+        previewDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 全ページを計算中...';
+        ui.exportBtn.disabled = true;
+
+        await new Promise(r => setTimeout(r, 50)); 
+
+        try {
+            const quality = parseInt(document.getElementById('in-compress').value) / 100;
+            let totalBytes = 0;
+
+            // すべてのページをループ処理する
+            for (let i = 0; i < cards.length; i++) {
+                const card = cards[i];
+                const fId = card.dataset.fId;
+
+                if (fId.startsWith('blank')) {
+                    totalBytes += 1500;
+                    continue;
+                }
+
+                const fileInfo = fileStore[fId];
+                let imgDataUrl;
+
+                if (fileInfo.isImage) {
+                    const img = new Image();
+                    img.src = URL.createObjectURL(new Blob([fileInfo.buffer.slice(0)], { type: fileInfo.type }));
+                    await new Promise(r => img.onload = r);
+                    const cvs = document.createElement('canvas');
+                    cvs.width = img.width; cvs.height = img.height;
+                    cvs.getContext('2d').drawImage(img, 0, 0);
+                    imgDataUrl = cvs.toDataURL('image/jpeg', quality);
+                } else {
+                    const pdf = await pdfjsLib.getDocument({ data: fileInfo.buffer.slice(0), password: document.getElementById('in-unlock').value }).promise;
+                    const page = await pdf.getPage(parseInt(card.dataset.pIdx) + 1);
+                    const vp = page.getViewport({ scale: 4.0 });
+                    const cvs = document.createElement('canvas');
+                    cvs.width = vp.width; cvs.height = vp.height;
+                    await page.render({ canvasContext: cvs.getContext('2d'), viewport: vp }).promise;
+                    imgDataUrl = cvs.toDataURL('image/jpeg', quality);
+                }
+
+                // Base64から正確なバイト数を算出
+                const base64Data = imgDataUrl.split(',')[1];
+                if (base64Data) {
+                    let padding = 0;
+                    if (base64Data.endsWith('==')) padding = 2;
+                    else if (base64Data.endsWith('=')) padding = 1;
+                    totalBytes += (base64Data.length * 0.75) - padding;
+                }
+            }
+
+            // PDF構造体のオーバーヘッド分として約2KBを加算
+            totalBytes += 2048;
+            
+            const sizeInMB = (totalBytes / (1024 * 1024)).toFixed(2);
+            previewDiv.innerHTML = `<i class="fas fa-file-pdf"></i> 予想出力サイズ: <strong>約 ${sizeInMB} MB</strong>`;
+
+        } catch (e) {
+            console.error("Size calculation error:", e);
+            previewDiv.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--red);"></i> 計算エラー';
+        } finally {
+            isCalculatingSize = false;
+            ui.exportBtn.disabled = false;
+        }
+    }
+
+    async function executeTask() {
         showLoader("処理を実行中...");
         try {
             const cards = Array.from(ui.grid.querySelectorAll('.page-card'));
             
-            // 1. PDF2JPG 分岐
             if (currentMode === 'pdf2jpg') {
                 for(let i=0; i<cards.length; i++) {
                     downloadData(cards[i].querySelector('canvas').toDataURL('image/jpeg', 0.8), `page_${i+1}.jpg`);
@@ -307,7 +404,6 @@ async function executeTask() {
                 hideLoader(); return;
             }
 
-            // 2. PDF2TXT テキスト抽出 分岐
             if (currentMode === 'pdf2txt') {
                 let extractedText = "--- Extracted Document ---\n\n";
                 for (let i = 0; i < cards.length; i++) {
@@ -324,7 +420,6 @@ async function executeTask() {
                 hideLoader(); return;
             }
 
-            // 3. PDF圧縮（全ページを画像化してサイズダウン）分岐
             if (currentMode === 'compress') {
                 const quality = parseInt(document.getElementById('in-compress').value) / 100;
                 const outDoc = await PDFDocument.create();
@@ -376,7 +471,6 @@ async function executeTask() {
                 return; 
             }
 
-            // 4. 通常のPDF生成フロー
             const outDoc = await PDFDocument.create();
             const parsedDocs = {};
 
